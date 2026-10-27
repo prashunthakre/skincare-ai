@@ -356,13 +356,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Automatically load API key from .env file
+# Automatically load API key from .env file or Streamlit Cloud Secrets
 env_file = os.path.abspath(os.path.join(current_dir, "../..", ".env"))
 if os.path.exists(env_file):
     with open(env_file, "r", encoding="utf-8") as f:
         for line in f:
             if line.startswith("GEMINI_API_KEY="):
                 os.environ["GEMINI_API_KEY"] = line.split("=", 1)[1].strip()
+
+if not os.environ.get("GEMINI_API_KEY"):
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            os.environ["GEMINI_API_KEY"] = str(st.secrets["GEMINI_API_KEY"]).strip()
+    except Exception:
+        pass
 
 active_gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
