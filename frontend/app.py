@@ -6,8 +6,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from components import get_base64_of_bin_file
 from backend.auth_utils import register_user, login_user
+from backend.model import preload_model_async
 import time
+import urllib.parse
 import extra_streamlit_components as stx
+
+# Preload TensorFlow & Model in the background while user logs in / interacts
+preload_model_async()
 
 def get_manager():
     return stx.CookieManager(key="app_cookie_manager")
@@ -168,7 +173,13 @@ if st.query_params.get("logout") == "true":
         
     st.query_params.clear()
 
-# If the user visits app.py but already has a valid session/cookie, redirect them
+# If the user visits app.py but already has a valid session/cookie/auth, redirect them
+if st.query_params.get("auth") and st.query_params.get("logout") != "true":
+    raw_auth = st.query_params["auth"]
+    st.session_state.logged_in = True
+    st.session_state.user_name = urllib.parse.unquote(raw_auth).replace('+', ' ')
+    st.switch_page("pages/0_Home.py")
+
 if st.session_state.logged_in:
     st.switch_page("pages/0_Home.py")
 
@@ -201,7 +212,13 @@ with col2:
             password = st.text_input("Password", type="password", placeholder="Enter your password")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Sign In", type="primary", use_container_width=True):
+            btn_col1, btn_col2 = st.columns([1.5, 1])
+            with btn_col1:
+                sign_in_clicked = st.button("Sign In", type="primary", use_container_width=True)
+            with btn_col2:
+                demo_clicked = st.button("⚡ Quick Demo", type="secondary", use_container_width=True, help="One-click login for presentations")
+
+            if sign_in_clicked:
                 if not email or not password:
                     st.error("Please fill in all fields.")
                 else:
@@ -211,12 +228,27 @@ with col2:
                             st.session_state.logged_in = True
                             st.session_state.user_name = message 
                             st.session_state.show_welcome_popup = True
-                            cookie_manager.set('auth_token', message, max_age=60*60)
-                            st.success("Login Successful!")
-                            time.sleep(1)
+                            st.query_params['auth'] = urllib.parse.quote(message)
+                            try:
+                                cookie_manager.set('auth_token', message, max_age=60*60)
+                            except Exception:
+                                pass
                             st.switch_page("pages/0_Home.py")
                         else:
                             st.error(message)
+            elif demo_clicked:
+                with st.spinner("Entering Demo Session..."):
+                    # Ensure demo account exists
+                    register_user("Dr. Demo User", "9876543210", "1995-01-01", "demo@skincareai.com", "demo123")
+                    st.session_state.logged_in = True
+                    st.session_state.user_name = "Dr. Demo User"
+                    st.session_state.show_welcome_popup = True
+                    st.query_params['auth'] = urllib.parse.quote("Dr. Demo User")
+                    try:
+                        cookie_manager.set('auth_token', "Dr. Demo User", max_age=60*60)
+                    except Exception:
+                        pass
+                    st.switch_page("pages/0_Home.py")
                             
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; color:#64748b; font-family: \"Plus Jakarta Sans\", sans-serif; font-size:0.9rem; margin-bottom:0.5rem;'>Don't have an account?</div>", unsafe_allow_html=True)
@@ -233,17 +265,24 @@ with col2:
             password = st.text_input("Password", type="password", placeholder="Create a password")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Register", type="primary", use_container_width=True):
+            if st.button("Register & Get Started", type="primary", use_container_width=True):
                  if not all([name, phone, dob, email, password]):
                      st.error("Please fill in all fields.")
                  else:
                      with st.spinner("Creating account..."):
                          success, message = register_user(name, phone, dob, email, password)
                          if success:
-                             st.success(message)
-                             time.sleep(2)
-                             st.session_state.auth_view = 'login'
-                             st.rerun()
+                             # Instant auto-login upon registration for seamless presentation
+                             st.session_state.logged_in = True
+                             st.session_state.user_name = name
+                             st.session_state.show_welcome_popup = True
+                             st.query_params['auth'] = urllib.parse.quote(name)
+                             try:
+                                 cookie_manager.set('auth_token', name, max_age=60*60)
+                             except Exception:
+                                 pass
+                             st.toast(f"Welcome, {name}! Account created successfully.", icon="🎉")
+                             st.switch_page("pages/0_Home.py")
                          else:
                              st.error(message)
                              

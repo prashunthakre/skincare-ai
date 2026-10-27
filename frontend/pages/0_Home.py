@@ -7,7 +7,12 @@ current_dir = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(os.path.join(current_dir, '..')))
 sys.path.append(os.path.abspath(os.path.join(current_dir, '../..')))
 
+import urllib.parse
 from components import render_header, render_footer, get_base64_of_bin_file, require_login
+from backend.model import preload_model_async
+
+# Preload TensorFlow & Model in the background while user browses Home
+preload_model_async()
 
 st.set_page_config(
     page_title="SkinCare AI Pro",
@@ -17,6 +22,12 @@ st.set_page_config(
 )
 
 require_login()
+render_header()
+
+cur_user = st.session_state.get('user_name', '')
+if not cur_user and 'auth' in st.query_params:
+    cur_user = urllib.parse.unquote(st.query_params['auth']).replace('+', ' ')
+auth_q = f"?auth={urllib.parse.quote(cur_user)}" if cur_user else ""
 
 # Manage welcome popup with placeholder to maintain element order across reruns
 welcome_placeholder = st.empty()
@@ -77,8 +88,6 @@ hero_b64 = get_base64_of_bin_file(os.path.join(assets_dir, "hero_bg.png"))
 about_b64 = get_base64_of_bin_file(os.path.join(assets_dir, "about_clinic.png"))
 treatments_b64 = get_base64_of_bin_file(os.path.join(assets_dir, "treatments_ai.png"))
 results_b64 = get_base64_of_bin_file(os.path.join(assets_dir, "results_face.png"))
-
-render_header()
 
 # CSS for the premium homepage layout with rich animations and styles
 st.markdown(f"""
@@ -569,7 +578,7 @@ st.markdown(f"""
     <div class="hero-content animate-fade-in-up">
         <h1>Discover Radiant Skin<br>With <span class="gradient-text">AI-Driven</span> Diagnosis</h1>
         <p>Empowering both patients and doctors with real-time, explainable diagnostic imaging to catch skin diseases early and enhance natural well-being through digital trust.</p>
-        <a href="/Diagnosis" target="_self" class="btn-premium">Get Free Diagnosis</a>
+        <a href="/Diagnosis{auth_q}" target="_self" class="btn-premium">Get Free Diagnosis</a>
     </div>
 </div>
 
@@ -612,7 +621,7 @@ st.markdown(f"""
             <div class="feat-card-content">
                 <h4>Grad-CAM Heatmaps</h4>
                 <p>Explainable AI outputs highlight alarming lesions so you know exactly what is being analyzed.</p>
-                <a href="/Diagnosis" target="_self" class="feat-card-link">Try Diagnostic Tool →</a>
+                <a href="/Diagnosis{auth_q}" target="_self" class="feat-card-link">Try Diagnostic Tool →</a>
             </div>
         </div>
         <div class="feat-card-container animate-fade-in-up animation-delay-2">
@@ -622,7 +631,7 @@ st.markdown(f"""
             <div class="feat-card-content">
                 <h4>Smart Severity Warning</h4>
                 <p>Categorizes risks into low, moderate, or high alerts dynamically based on prediction weights.</p>
-                <a href="/Diagnosis" target="_self" class="feat-card-link">Check Severity Levels →</a>
+                <a href="/Diagnosis{auth_q}" target="_self" class="feat-card-link">Check Severity Levels →</a>
             </div>
         </div>
         <div class="feat-card-container animate-fade-in-up animation-delay-3">
@@ -632,7 +641,7 @@ st.markdown(f"""
             <div class="feat-card-content">
                 <h4>Medical Chatbot Assistant</h4>
                 <p>An intelligent chatbot customized with your analysis context to address questions immediately.</p>
-                <a href="/Diagnosis" target="_self" class="feat-card-link">Consult Chatbot →</a>
+                <a href="/Diagnosis{auth_q}" target="_self" class="feat-card-link">Consult Chatbot →</a>
             </div>
         </div>
     </div>

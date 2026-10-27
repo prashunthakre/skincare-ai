@@ -1,6 +1,13 @@
 __pycache__/
 *.pyc
 .env
+.env.*
+*.env
+!.env.example
 temp/
 scratch/
 .streamlit/
+*.pdf
+data/fitzpatrick17k_all_classes/
+
+

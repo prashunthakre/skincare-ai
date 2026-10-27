@@ -9,38 +9,51 @@ def get_base64_of_bin_file(bin_file):
     except:
         return ""
 
+import urllib.parse
 import extra_streamlit_components as stx
 
 def get_manager():
     return stx.CookieManager(key="components_manager")
 
 def require_login():
-    # 1. Check session state first
-    if 'logged_in' in st.session_state and st.session_state.logged_in:
+    # 0. Check query parameters first (100% persistent across full page links)
+    if 'auth' in st.query_params and st.query_params['auth']:
+        raw_auth = st.query_params['auth']
+        cleaned_user = urllib.parse.unquote(raw_auth).replace('+', ' ')
+        st.session_state.logged_in = True
+        st.session_state.user_name = cleaned_user
+        return
+
+    # 1. Check session state
+    if st.session_state.get('logged_in', False):
+        if 'user_name' in st.session_state and st.session_state['user_name']:
+            st.query_params['auth'] = urllib.parse.quote(st.session_state['user_name'])
         return
         
-    # 2. Check st.context.cookies first (completely synchronous, rerun-free)
+    # 2. Check st.context.cookies
     auth_token = None
     if hasattr(st, 'context') and hasattr(st.context, 'cookies'):
         auth_token = st.context.cookies.get('auth_token')
         
     if auth_token:
-        # Restore session silently without rendering the CookieManager component
         st.session_state.logged_in = True
         st.session_state.user_name = auth_token
+        st.query_params['auth'] = urllib.parse.quote(auth_token)
         return
         
-    # 3. Fallback to stx CookieManager only if context cookies are not available
-    cookie_manager = get_manager()
-    auth_token = cookie_manager.get('auth_token')
-        
-    if auth_token:
-        # Restore session
-        st.session_state.logged_in = True
-        st.session_state.user_name = auth_token
-        return
+    # 3. Fallback to stx CookieManager
+    try:
+        cookie_manager = get_manager()
+        auth_token = cookie_manager.get('auth_token')
+        if auth_token:
+            st.session_state.logged_in = True
+            st.session_state.user_name = auth_token
+            st.query_params['auth'] = urllib.parse.quote(auth_token)
+            return
+    except Exception:
+        pass
 
-    # If we still don't have the token, they are truly logged out or expired.
+    # If not logged in, redirect to login page
     try:
         st.switch_page("app.py")
     except Exception:
@@ -53,10 +66,25 @@ def render_header():
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
         
-        /* Hide default Streamlit components */
+        /* Hide default Streamlit components and completely remove sidebar */
         #MainMenu {visibility: hidden;}
-        header {visibility: hidden;}
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+            height: 0px !important;
+            border: none !important;
+        }
+        header[data-testid="stHeader"] [data-testid="stToolbar"] {
+            display: none !important;
+        }
+        header[data-testid="stHeader"] [data-testid="stDecoration"] {
+            display: none !important;
+        }
         footer {visibility: hidden;}
+        section[data-testid="stSidebar"],
+        div[data-testid="collapsedControl"] {
+            display: none !important;
+            visibility: hidden !important;
+        }
         .block-container {
             padding-top: 0rem !important;
             padding-bottom: 0rem !important;
@@ -71,7 +99,7 @@ def render_header():
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1.2rem 5rem;
+            padding: 1.2rem 4rem;
             box-shadow: 0 4px 30px rgba(0,0,0,0.02);
             position: sticky;
             top: 0;
@@ -181,34 +209,73 @@ def render_header():
         }
         .btn-logout:hover { background-color: #fee2e2; transform: translateY(-1px); border-color: #fca5a5; }
         
-        @media (max-width: 900px) {
-            .nav-links { display: none; }
-            .custom-navbar { padding: 1rem 2rem; }
+        /* Global Ultra-Modern Spinner & Loading State */
+        div[data-testid="stSpinner"] {
+            background: linear-gradient(135deg, rgba(240, 249, 255, 0.95) 0%, rgba(224, 242, 254, 0.85) 100%) !important;
+            border: 1px solid rgba(14, 165, 233, 0.35) !important;
+            border-radius: 16px !important;
+            padding: 1.25rem 2rem !important;
+            margin: 1.5rem auto !important;
+            max-width: 650px !important;
+            box-shadow: 0 10px 25px -5px rgba(14, 165, 233, 0.15), 0 8px 10px -6px rgba(14, 165, 233, 0.1) !important;
+            backdrop-filter: blur(16px) !important;
+        }
+        div[data-testid="stSpinner"] > div {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 0.85rem !important;
+            font-family: 'Outfit', sans-serif !important;
+            font-weight: 600 !important;
+            font-size: 1.05rem !important;
+            color: #0369a1 !important;
+            letter-spacing: 0.2px !important;
+        }
+        div[data-testid="stSpinner"] svg {
+            stroke: #0ea5e9 !important;
+            width: 28px !important;
+            height: 28px !important;
+            filter: drop-shadow(0 0 8px rgba(14, 165, 233, 0.5)) !important;
+        }
+        div[data-testid="stStatusWidget"] {
+            display: none !important;
         }
     </style>
+    """, unsafe_allow_html=True)
     
+    cur_user = st.session_state.get('user_name', '')
+    if not cur_user and 'auth' in st.query_params:
+        cur_user = urllib.parse.unquote(st.query_params['auth']).replace('+', ' ')
+    auth_q = f"?auth={urllib.parse.quote(cur_user)}" if cur_user else ""
+    
+    st.markdown(f"""
     <div class="custom-navbar">
         <div class="logo-section">
             <h2>SKINCARE AI</h2>
         </div>
         <div class="nav-links">
-            <a href="/" target="_self">Home</a>
-            <a href="/About_Us" target="_self">About Us</a>
-            <a href="/Diagnosis" target="_self">Diagnosis</a>
-            <a href="/Contact" target="_self">Contact</a>
+            <a href="/Home{auth_q}" target="_self">Home</a>
+            <a href="/About_Us{auth_q}" target="_self">About Us</a>
+            <a href="/Diagnosis{auth_q}" target="_self">Diagnosis</a>
+            <a href="/Contact{auth_q}" target="_self">Contact</a>
         </div>
         <div class="nav-buttons">
-            <a href="/Contact" target="_self" class="btn-call">Support</a>
-            <a href="/Diagnosis" target="_self" class="btn-book">Try AI Analysis</a>
+            <a href="/Contact{auth_q}" target="_self" class="btn-call">Support</a>
+            <a href="/Diagnosis{auth_q}" target="_self" class="btn-book">Try AI Analysis</a>
             <a href="/?logout=true" target="_self" class="btn-logout">Logout</a>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 def render_footer():
-    st.markdown("""
+    cur_user = st.session_state.get('user_name', '')
+    if not cur_user and 'auth' in st.query_params:
+        cur_user = urllib.parse.unquote(st.query_params['auth']).replace('+', ' ')
+    auth_q = f"?auth={urllib.parse.quote(cur_user)}" if cur_user else ""
+
+    st.markdown(f"""
     <style>
-        .custom-footer {
+        .custom-footer {{
             background-color: #0f172a;
             padding: 5rem 5rem 3rem 5rem;
             margin-top: 0;
@@ -219,13 +286,13 @@ def render_footer():
             color: #94a3b8;
             font-size: 0.95rem;
             border-top: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .footer-col {
+        }}
+        .footer-col {{
             flex: 1;
             min-width: 250px;
             margin-bottom: 2.5rem;
-        }
-        .footer-col h4 {
+        }}
+        .footer-col h4 {{
             font-family: 'Outfit', sans-serif;
             color: #f8fafc;
             margin-bottom: 1.8rem;
@@ -233,25 +300,25 @@ def render_footer():
             font-size: 1.15rem;
             letter-spacing: 1px;
             text-transform: uppercase;
-        }
-        .footer-col p {
+        }}
+        .footer-col p {{
             line-height: 1.8;
             margin-bottom: 0.8rem;
             font-weight: 300;
-        }
-        .footer-col a {
+        }}
+        .footer-col a {{
             color: #94a3b8;
             text-decoration: none;
             display: block;
             margin-bottom: 0.9rem;
             transition: all 0.3s ease;
             font-weight: 400;
-        }
-        .footer-col a:hover {
+        }}
+        .footer-col a:hover {{
             color: #38bdf8;
             transform: translateX(3px);
-        }
-        .copyright {
+        }}
+        .copyright {{
             width: 100%;
             text-align: center;
             padding-top: 2.5rem;
@@ -260,7 +327,7 @@ def render_footer():
             font-size: 0.85rem;
             color: #64748b;
             font-weight: 400;
-        }
+        }}
     </style>
     
     <div class="custom-footer">
@@ -270,10 +337,10 @@ def render_footer():
         </div>
         <div class="footer-col">
             <h4>QUICK LINKS</h4>
-            <a href="/" target="_self">Home</a>
-            <a href="/Diagnosis" target="_self">Try AI Diagnosis</a>
-            <a href="/About_Us" target="_self">About The Technology</a>
-            <a href="/Contact" target="_self">Contact Us</a>
+            <a href="/Home{auth_q}" target="_self">Home</a>
+            <a href="/Diagnosis{auth_q}" target="_self">Try AI Diagnosis</a>
+            <a href="/About_Us{auth_q}" target="_self">About The Technology</a>
+            <a href="/Contact{auth_q}" target="_self">Contact Us</a>
         </div>
         <div class="footer-col">
             <h4>CONTACT CLINIC</h4>
